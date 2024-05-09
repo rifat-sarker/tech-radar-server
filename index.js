@@ -3,6 +3,7 @@ const cors = require('cors')
 require('dotenv').config()
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express();
+const nodemailer = require("nodemailer");
 const port = process.env.PORT || 5000;
 
 //middleware
@@ -28,6 +29,7 @@ async function run() {
     await client.connect();
 
     const productCollection = client.db('productDB').collection('product')
+    const mycartCollection = client.db('productDB').collection('mycart')
 
     app.get('/product', async(req,res)=> {
         const cursor = productCollection.find();
@@ -47,6 +49,35 @@ async function run() {
         console.log(newProduct);
         const result = await productCollection.insertOne(newProduct);
         res.send(result);
+    })
+
+    // add product to mycart
+    app.get('/mycart', async(req,res)=> {
+      const cursor = mycartCollection.find();
+      const result = await cursor.toArray();
+      res.send(result)
+    })
+
+    app.post('/mycart',async(req,res)=>{
+      const user = req.body;
+      console.log(user);
+      const result = await mycartCollection.insertOne(user);
+      res.send(result);
+    })
+
+    app.post('/mycart/:id', async(req,res)=>{
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id)}
+      const result = await productCollection.findOne(query)
+      res.send(result)
+    })
+
+    // remove product from mycart
+    app.delete('/mycart/:id', async(req,res)=> {
+      const id = req.params.id;
+      const query = { _id:(id)}
+      const result = await mycartCollection.deleteOne(query)
+      res.send(result)
     })
 
     app.put('/product/:id', async(req,res)=>{
@@ -69,6 +100,40 @@ async function run() {
       const result = await productCollection.updateOne(filter, product, options)
       res.send(result)
     } )
+
+    // contact information
+    // Email content
+    app.post('/contact',(req,res)=> {
+      const {name, email, message} = req.body;
+
+      const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: process.env.EMAIL ,
+          pass: process.env.PASSWORD
+        }
+      })
+
+      // setup email data with unicode symbols
+      const mailOptions = {
+        from: "rifatswd@gmail.com",
+        to: "rifatswd@gmail.com",
+        subject: "You have received a new message from Tech Radar website",
+        text: `Name:${name}\n Email:${email}\n Message:${message}`
+      }
+
+      // send mail with defined transport object
+       transporter.sendMail(mailOptions,(error, info)=> {
+        if(error){
+          res.status(500).send("Error sending email")
+        }
+        else{
+          console.log("Email sent successfully : " + info.response)
+          res.status(200).send("Email sent successfully")
+        }
+      })
+
+    })
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
